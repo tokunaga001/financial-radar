@@ -1,0 +1,23 @@
+name: Financial Radar
+
+on:
+  schedule:
+    - cron: '0 23 * * *'   # 日本時間 毎朝8時 (UTC 23時)
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install libraries
+        run: pip install pandas pandas_datareader yfinance
+
+      - name: Run radar
+        run: python crash_detector.py
