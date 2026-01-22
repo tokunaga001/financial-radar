@@ -3,7 +3,6 @@ import csv
 from datetime import datetime, timezone
 import pandas as pd
 import yfinance as yf
-from pandas_datareader import data as pdr
 
 def last_value(obj):
     if isinstance(obj, pd.DataFrame):
@@ -12,28 +11,40 @@ def last_value(obj):
     return float(obj.iloc[-1]) if len(obj) else None
 
 # ===== シグナル計算 =====
-us2y = pdr.DataReader("DGS2", "fred", start="2023-01-01")
+
+# --- 米国2年国債利回り（FRED: DGS2 を yfinance 経由で取得）---
+us2y = yf.download("DGS2", start="2023-01-01", progress=False)
+us2y = us2y[["Close"]].rename(columns={"Close": "DGS2"})
 us2y["chg10"] = us2y["DGS2"] - us2y["DGS2"].shift(10)
+
 us2y_now = last_value(us2y["DGS2"])
 us2y_chg10 = last_value(us2y["chg10"])
 sig_us2y = (us2y_chg10 is not None) and (us2y_chg10 <= -0.50)
 
+# --- 地銀（KRE）---
 kre = yf.download("KRE", period="2y", auto_adjust=True, progress=False)
 close_kre = kre["Close"] if "Close" in kre else kre.iloc[:, 0]
 kre_ma200 = close_kre.rolling(200).mean()
 kre_chg20 = (close_kre / close_kre.shift(20) - 1).dropna()
+
 kre_close_now = last_value(close_kre)
 kre_ma200_now = last_value(kre_ma200)
 kre_chg20_now = last_value(kre_chg20)
+
 sig_kre = (
-    kre_close_now is not None and kre_ma200_now is not None and kre_chg20_now is not None
-    and (kre_close_now < kre_ma200_now) and (kre_chg20_now <= -0.10)
+    kre_close_now is not None
+    and kre_ma200_now is not None
+    and kre_chg20_now is not None
+    and (kre_close_now < kre_ma200_now)
+    and (kre_chg20_now <= -0.10)
 )
 
+# --- ハイイールド（JNK）---
 jnk = yf.download("JNK", period="2y", auto_adjust=True, progress=False)
 close_jnk = jnk["Close"] if "Close" in jnk else jnk.iloc[:, 0]
 jnk_chg20 = (close_jnk / close_jnk.shift(20) - 1).dropna()
 jnk_chg20_now = last_value(jnk_chg20)
+
 sig_hy = (jnk_chg20_now is not None) and (jnk_chg20_now <= -0.08)
 
 signals = {
@@ -58,7 +69,6 @@ print("状態:", status)
 os.makedirs("results", exist_ok=True)
 path = "results/radar_log.csv"
 
-# UTC時刻で保存（安定）。日本時刻にしたければ後で変換できます。
 ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S%z")
 
 row = {
@@ -84,4 +94,3 @@ with open(path, "a", newline="", encoding="utf-8") as f:
     writer.writerow(row)
 
 print(f"ログに追記しました: {path}")
-
